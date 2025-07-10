@@ -6,6 +6,8 @@ import pickle
 import queue
 import shutil
 import threading
+import time
+
 import numpy as np
 import ecole
 from collections import namedtuple
@@ -83,7 +85,7 @@ def make_samples(in_queue, out_queue, stop_flag):
         observation_function = { "scores": ExploreThenStrongBranch(expert_probability=query_expert_prob),
                                  "node_observation": ecole.observation.NodeBipartite() }
         env = ecole.environment.Branching(observation_function=observation_function,
-                                          scip_params=scip_parameters, pseudo_candidates=True)
+                                          scip_params=scip_parameters)
 
         print(f"[w {threading.current_thread().name}] episode {episode}, seed {seed}, "
               f"processing instance '{instance}'...\n", end='')
@@ -273,7 +275,7 @@ if __name__ == '__main__':
 
     print(f"seed {args.seed}")
 
-    train_size = 100000
+    train_size = 3000
     valid_size = 20000
     test_size = 20000
     node_record_prob = 0.05
@@ -321,17 +323,30 @@ if __name__ == '__main__':
     # create output directory, throws an error if it already exists
     os.makedirs(out_dir, exist_ok=True)
 
+    # Record start time
+    start_time = time.time()
+
     rng = np.random.RandomState(args.seed)
     collect_samples(instances_train, out_dir + '/train', rng, train_size,
                     args.njobs, query_expert_prob=node_record_prob,
                     time_limit=time_limit)
 
-    rng = np.random.RandomState(args.seed + 1)
-    collect_samples(instances_valid, out_dir + '/valid', rng, test_size,
-                    args.njobs, query_expert_prob=node_record_prob,
-                    time_limit=time_limit)
+    # Record end time
+    end_time = time.time()
 
-    rng = np.random.RandomState(args.seed + 2)
-    collect_samples(instances_test, out_dir + '/test', rng, test_size,
-                    args.njobs, query_expert_prob=node_record_prob,
-                    time_limit=time_limit)
+    # Calculate elapsed time
+    elapsed_time = end_time - start_time
+
+    # Save elapsed time to a text file
+    with open(f'old_{args.problem}_training_time.txt', 'w') as f:
+        f.write(f"Time taken to generate the complete training set: {elapsed_time} seconds")
+
+    # rng = np.random.RandomState(args.seed + 1)
+    # collect_samples(instances_valid, out_dir + '/valid', rng, test_size,
+    #                 args.njobs, query_expert_prob=node_record_prob,
+    #                 time_limit=time_limit)
+    #
+    # rng = np.random.RandomState(args.seed + 2)
+    # collect_samples(instances_test, out_dir + '/test', rng, test_size,
+    #                 args.njobs, query_expert_prob=node_record_prob,
+    #                 time_limit=time_limit)

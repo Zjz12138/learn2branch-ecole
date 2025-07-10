@@ -67,9 +67,11 @@ def process(policy, data_loader, top_k=[1, 3, 5, 10], optimizer=None):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        'problem',
+        '--problem',
         help='MILP instance type to process.',
         choices=['setcover', 'cauctions', 'facilities', 'indset', 'mknapsack'],
+        type=str,
+        default='setcover',
     )
     parser.add_argument(
         '-s', '--seed',
@@ -88,8 +90,8 @@ if __name__ == "__main__":
     ### HYPER PARAMETERS ###
     max_epochs = 1000
     batch_size = 32
-    pretrain_batch_size = 128
-    valid_batch_size = 128
+    pretrain_batch_size = 32
+    valid_batch_size = 32
     lr = 1e-3
     entropy_bonus = 0.0
     top_k = [1, 3, 5, 10]
@@ -102,7 +104,7 @@ if __name__ == "__main__":
         'mknapsack': 'mknapsack/100_6',
     }
     problem_folder = problem_folders[args.problem]
-    running_dir = f"model/{args.problem}/{args.seed}"
+    running_dir = f"model_1/{args.problem}/{args.seed}"
     os.makedirs(running_dir, exist_ok=True)
 
     ### PYTORCH SETUP ###
@@ -116,14 +118,14 @@ if __name__ == "__main__":
     import torch.nn.functional as F
     import torch_geometric
     from utilities import log, pad_tensor, GraphDataset, Scheduler
-    sys.path.insert(0, os.path.abspath(f'model'))
-    from model import GNNPolicy
+    sys.path.insert(0, os.path.abspath(f'model_1'))
+    from model_1.model import GNNPolicy
 
     rng = np.random.RandomState(args.seed)
     torch.manual_seed(args.seed)
 
     ### LOG ###
-    logfile = os.path.join(running_dir, 'train_log.txt')
+    logfile = os.path.join(running_dir, f'train_BGCN_{args.problem}_log.txt')
     if os.path.exists(logfile):
         os.remove(logfile)
 
@@ -146,11 +148,14 @@ if __name__ == "__main__":
     train_files = [str(file) for file in (pathlib.Path(f'data/samples')/problem_folder/'train').glob('sample_*.pkl')]
     pretrain_files = [f for i, f in enumerate(train_files) if i % 10 == 0]
     valid_files = [str(file) for file in (pathlib.Path(f'data/samples')/problem_folder/'valid').glob('sample_*.pkl')]
+    test_files = [str(file) for file in (pathlib.Path(f'data/samples')/problem_folder/'test').glob('sample_*.pkl')]
 
     pretrain_data = GraphDataset(pretrain_files)
     pretrain_loader = torch_geometric.loader.DataLoader(pretrain_data, pretrain_batch_size, shuffle=False)
     valid_data = GraphDataset(valid_files)
     valid_loader = torch_geometric.loader.DataLoader(valid_data, valid_batch_size, shuffle=False)
+    test_data = GraphDataset(test_files)
+    test_loader = torch_geometric.loader.DataLoader(test_data, valid_batch_size, shuffle=False)
 
     for epoch in range(max_epochs + 1):
         log(f"EPOCH {epoch}...", logfile)
@@ -170,7 +175,7 @@ if __name__ == "__main__":
 
         scheduler.step(valid_loss)
         if scheduler.num_bad_epochs == 0:
-            torch.save(policy.state_dict(), pathlib.Path(running_dir)/'train_params.pkl')
+            torch.save(policy.state_dict(), pathlib.Path(running_dir)/f'train_BGCN_{args.problem}_params.pkl')
             log(f"  best model so far", logfile)
         elif scheduler.num_bad_epochs == 10:
             log(f"  10 epochs without improvement, decreasing learning rate", logfile)
@@ -178,6 +183,6 @@ if __name__ == "__main__":
             log(f"  20 epochs without improvement, early stopping", logfile)
             break
 
-    policy.load_state_dict(torch.load(pathlib.Path(running_dir)/'train_params.pkl'))
-    valid_loss, valid_kacc, entropy = process(policy, valid_loader, top_k, None)
-    log(f"BEST VALID LOSS: {valid_loss:0.3f} " + "".join([f" acc@{k}: {acc:0.3f}" for k, acc in zip(top_k, valid_kacc)]), logfile)
+    policy.load_state_dict(torch.load(pathlib.Path(running_dir)/f'train_BGCN_{args.problem}_params.pkl'))
+    test_loss, test_kacc, entropy = process(policy, test_loader, top_k, None)
+    log(f"BEST TEST LOSS: {test_loss:0.3f} " + "".join([f" acc@{k}: {acc:0.3f}" for k, acc in zip(top_k, test_kacc)]), logfile)

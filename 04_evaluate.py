@@ -10,13 +10,14 @@ import pickle
 import ecole
 import pyscipopt
 
-
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        'problem',
+        '--problem',
         help='MILP instance type to process.',
         choices=['setcover', 'cauctions', 'facilities', 'indset'],
+        type=str,
+        default='cauctions',
     )
     parser.add_argument(
         '-g', '--gpu',
@@ -28,23 +29,24 @@ if __name__ == "__main__":
 
     result_file = f"{args.problem}_{time.strftime('%Y%m%d-%H%M%S')}.csv"
     instances = []
-    seeds = [0, 1, 2, 3, 4]
-    internal_branchers = ['relpscost']
-    gnn_models = ['supervised'] # Can be supervised
+    seeds = [0, 1]
+    internal_branchers = []
+
+    gnn_models = ['BGCN_new', 'BGCN']
     time_limit = 3600
 
     if args.problem == 'setcover':
-        instances += [{'type': 'small', 'path': f"data/instances/setcover/transfer_500r_1000c_0.05d/instance_{i+1}.lp"} for i in range(20)]
+        # instances += [{'type': 'small', 'path': f"data/instances/setcover/transfer_500r_1000c_0.05d/instance_{i+1}.lp"} for i in range(20)]
         instances += [{'type': 'medium', 'path': f"data/instances/setcover/transfer_1000r_1000c_0.05d/instance_{i+1}.lp"} for i in range(20)]
         instances += [{'type': 'big', 'path': f"data/instances/setcover/transfer_2000r_1000c_0.05d/instance_{i+1}.lp"} for i in range(20)]
 
     elif args.problem == 'cauctions':
-        instances += [{'type': 'small', 'path': f"data/instances/cauctions/transfer_100_500/instance_{i+1}.lp"} for i in range(20)]
+        # instances += [{'type': 'small', 'path': f"data/instances/cauctions/transfer_100_500/instance_{i+1}.lp"} for i in range(20)]
         instances += [{'type': 'medium', 'path': f"data/instances/cauctions/transfer_200_1000/instance_{i+1}.lp"} for i in range(20)]
         instances += [{'type': 'big', 'path': f"data/instances/cauctions/transfer_300_1500/instance_{i+1}.lp"} for i in range(20)]
 
     elif args.problem == 'facilities':
-        instances += [{'type': 'small', 'path': f"data/instances/facilities/transfer_100_100_5/instance_{i+1}.lp"} for i in range(20)]
+        # instances += [{'type': 'small', 'path': f"data/instances/facilities/transfer_100_100_5/instance_{i+1}.lp"} for i in range(20)]
         instances += [{'type': 'medium', 'path': f"data/instances/facilities/transfer_200_100_5/instance_{i+1}.lp"} for i in range(20)]
         instances += [{'type': 'big', 'path': f"data/instances/facilities/transfer_400_100_5/instance_{i+1}.lp"} for i in range(20)]
 
@@ -88,7 +90,7 @@ if __name__ == "__main__":
         device = f"cuda:0"
 
     import torch
-    from model.model import GNNPolicy
+    from model_1.model import GNNPolicy
 
     # load and assign tensorflow models to policies (share models and update parameters)
     loaded_models = {}
@@ -97,12 +99,16 @@ if __name__ == "__main__":
         if policy['type'] == 'gnn':
             if policy['name'] not in loaded_models:
                 ### MODEL LOADING ###
-                model = GNNPolicy().to(device)
-                if policy['name'] == 'supervised':
-                    model.load_state_dict(torch.load(f"model/{args.problem}/{policy['seed']}/train_params.pkl"))
+                if policy['name'] == 'BGCN':
+                    model1 = GNNPolicy().to(device)
+                    model1.load_state_dict(torch.load(f"model_1/{args.problem}/{policy['seed']}/train_BGCN_{args.problem}_params.pkl"))
+                    loaded_models[policy['name']] = model1
+                elif policy['name'] == 'BGCN_new':
+                    model2 = GNNPolicy().to(device)
+                    model2.load_state_dict(torch.load(f"model_1/{args.problem}/{policy['seed']}/train_BGCN_new_{args.problem}_params.pkl"))
+                    loaded_models[policy['name']] = model2
                 else:
                     raise Exception(f"Unrecognized GNN policy {policy['name']}")
-                loaded_models[policy['name']] = model
 
             policy['model'] = loaded_models[policy['name']]
 
@@ -120,6 +126,7 @@ if __name__ == "__main__":
         'status',
         'walltime',
         'proctime',
+        'commtime',
     ]
     os.makedirs('results', exist_ok=True)
     scip_parameters = {'separating/maxrounds': 0, 'presolving/maxrestarts': 0, 'limits/time': time_limit,
@@ -147,6 +154,8 @@ if __name__ == "__main__":
 
                     walltime = time.perf_counter() - walltime
                     proctime = time.process_time() - proctime
+                    commtime = 0
+
 
                 elif policy['type'] == 'gnn':
                     # Run the GNN policy
@@ -154,20 +163,25 @@ if __name__ == "__main__":
                                                       scip_params=scip_parameters)
                     env.seed(policy['seed'])
                     torch.manual_seed(policy['seed'])
-
                     walltime = time.perf_counter()
                     proctime = time.process_time()
+                    commtime = 0
+                    observation, action_set, re, done, _ = env.reset(instance['path'])
 
-                    observation, action_set, _, done, _ = env.reset(instance['path'])
+
                     while not done:
-                        with torch.no_grad():
-                            observation = (torch.from_numpy(observation.row_features.astype(np.float32)).to(device),
-                                           torch.from_numpy(observation.edge_features.indices.astype(np.int64)).to(device),
-                                           torch.from_numpy(observation.edge_features.values.astype(np.float32)).view(-1, 1).to(device),
-                                           torch.from_numpy(observation.variable_features.astype(np.float32)).to(device))
 
+                        with torch.no_grad():
+
+                            time1 = time.perf_counter()
+                            observation = ( torch.from_numpy(observation.row_features.astype(np.float32)).to(device),
+                                                    torch.from_numpy(observation.edge_features.indices.astype(np.int64)).to(device),
+                                                    torch.from_numpy(observation.edge_features.values.astype(np.float32)).view(-1, 1).to(device),
+                                                    torch.from_numpy(observation.variable_features.astype(np.float32)).to(device),
+                                                   )
                             logits = policy['model'](*observation)
                             action = action_set[logits[action_set.astype(np.int64)].argmax()]
+                            commtime += time.perf_counter() - time1
                             observation, action_set, _, done, _ = env.step(action)
 
                     walltime = time.perf_counter() - walltime
@@ -192,6 +206,7 @@ if __name__ == "__main__":
                     'status': status,
                     'walltime': walltime,
                     'proctime': proctime,
+                    'commtime': commtime,
                 })
                 csvfile.flush()
 
