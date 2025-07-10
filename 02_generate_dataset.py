@@ -275,7 +275,7 @@ if __name__ == '__main__':
 
     print(f"seed {args.seed}")
 
-    train_size = 3000
+    train_size = 100000
     valid_size = 20000
     test_size = 20000
     node_record_prob = 0.05
@@ -341,12 +341,12 @@ if __name__ == '__main__':
     with open(f'old_{args.problem}_training_time.txt', 'w') as f:
         f.write(f"Time taken to generate the complete training set: {elapsed_time} seconds")
 
-    # rng = np.random.RandomState(args.seed + 1)
-    # collect_samples(instances_valid, out_dir + '/valid', rng, test_size,
-    #                 args.njobs, query_expert_prob=node_record_prob,
-    #                 time_limit=time_limit)
-    #
-    # rng = np.random.RandomState(args.seed + 2)
-    # collect_samples(instances_test, out_dir + '/test', rng, test_size,
-    #                 args.njobs, query_expert_prob=node_record_prob,
-    #                 time_limit=time_limit)
+    rng = np.random.RandomState(args.seed + 1)
+    collect_samples(instances_valid, out_dir + '/valid', rng, test_size,
+                    args.njobs, query_expert_prob=node_record_prob,
+                    time_limit=time_limit)
+
+    rng = np.random.RandomState(args.seed + 2)
+    collect_samples(instances_test, out_dir + '/test', rng, test_size,
+                    args.njobs, query_expert_prob=node_record_prob,
+                    time_limit=time_limit)
