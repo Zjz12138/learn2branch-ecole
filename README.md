@@ -1,3 +1,10 @@
+## ecole要下载0.8.1版本
+## 推荐生产100k个samples，否则性能会下降
+本分支做了以下更改：
+  修复了02_generate_dataset.py中错误（即禁用pseudo_candidates=True）
+  完善了03_train_gnn.py部分代码（应当训练-验证-测试，源代码缺少测试）
+
+
 # Exact Combinatorial Optimization with Graph Convolutional Neural Networks (Ecole+Pytorch+Pytorch Geometric reimplementation)
 
 This is the official reimplementation of the proposed GNN model from the paper "Exact Combinatorial Optimization with Graph Convolutional Neural Networks" [NeurIPS 2019 paper](https://arxiv.org/abs/1906.01629) using the [Ecole library](https://github.com/ds4dm/ecole). This reimplementation also makes use [Pytorch](https://github.com/pytorch/pytorch) instead of Tensorflow, and of [Pytorch Geometric](https://github.com/pyg-team/pytorch_geometric) for handling the GNN. As a consequence, much of the code is now simplified. Slight discrepancies in results from the original implementation is to be expected.
@@ -23,7 +30,7 @@ Our recommended installation uses the [Conda package manager](https://docs.conda
 __Instructions:__ Install Ecole, Pytorch and Pytorch Geometric using conda. At the time of writing these installation instructions, this can be accomplished by running:
 
 ```
-conda install ecole
+conda install ecole==0.8.1
 conda install pytorch torchvision torchaudio cudatoolkit=10.2 -c pytorch
 conda install pyg -c pyg -c conda-forge
 ```
