@@ -1,7 +1,9 @@
-## ecole要下载0.8.1版本
-## 推荐生产100k个samples，否则性能会下降
+# ecole要下载0.8.1版本
+# 推荐生产100k个samples，否则性能会下降
 本分支做了以下更改：
+
   修复了02_generate_dataset.py中错误（即禁用pseudo_candidates=True）
+  
   完善了03_train_gnn.py部分代码（应当训练-验证-测试，源代码缺少测试）
 
 
